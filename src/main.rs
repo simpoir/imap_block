@@ -1,91 +1,15 @@
-use async_std::fs::File;
-use async_std::prelude::*;
 use async_std::task::sleep;
 use log::{self, debug, error, warn};
 use std::env::args;
 use std::process::exit;
 use std::time::Duration;
 
-type Res<T> = Result<T, Box<dyn std::error::Error>>;
+mod creds;
+mod errors;
+mod backoff;
 
 const POLL: u64 = 300;
 const KEEP_ALIVE: u64 = 1700;
-
-struct Backoff<'a> {
-    i: usize,
-    v: &'a [u64],
-}
-
-impl<'a> Backoff<'a> {
-    pub fn new(v: &'a [u64]) -> Backoff<'a> {
-        Backoff { i: 0, v }
-    }
-
-    pub fn next(&mut self) -> u64 {
-        let ret = self.v[self.i];
-        self.i = std::cmp::min(self.i + 1, self.v.len());
-        ret
-    }
-
-    pub fn reset(&mut self) {
-        self.i = 0;
-    }
-}
-
-struct Creds {
-    host: String,
-    port: u16,
-    user: String,
-    pass: String,
-}
-
-impl Creds {
-    pub async fn from_mutt(conf: String) -> Res<Creds> {
-        let mut c = String::new();
-        File::open(conf).await?.read_to_string(&mut c).await?;
-
-        let mut host = String::new();
-        let mut port = 993;
-        let mut user = String::new();
-        let mut pass = String::new();
-        for l in c.lines() {
-            if l.contains("imap_pass") {
-                if let Some(sep) = l.find("=") {
-                    let (_, v) = l.split_at(sep + 1);
-                    pass = v.trim().trim_matches('\'').trim_matches('"').into();
-                };
-            }
-
-            if l.contains("imap_user") {
-                if let Some(sep) = l.find("=") {
-                    let (_, v) = l.split_at(sep + 1);
-                    user = v.trim().trim_matches('\'').trim_matches('"').into();
-                };
-            }
-
-            if l.contains("folder") {
-                if let Some(sep) = l.find("=") {
-                    let (_, v) = l.split_at(sep + 1);
-                    let raw_url = v.trim().trim_matches('\'').trim_matches('"');
-                    let url = urlparse::urlparse(raw_url);
-                    if let Some(h) = url.hostname {
-                        host = h.into();
-                    }
-                    if let Some(p) = url.port {
-                        port = p;
-                    }
-                }
-            }
-        }
-
-        Ok(Creds {
-            host,
-            port,
-            user,
-            pass,
-        })
-    }
-}
 
 fn dump_status(count: usize) {
     let percent = if count > 0 { 100 } else { 0 };
@@ -107,7 +31,7 @@ async fn main() {
         }
     };
 
-    let cred = match Creds::from_mutt(conf_path).await {
+    let cred = match creds::Creds::from_mutt(&conf_path).await {
         Ok(v) => v,
         Err(e) => {
             error!("Problem reading config: {}", e);
@@ -115,7 +39,7 @@ async fn main() {
         }
     };
 
-    let mut backoff = Backoff::new(&[0, 60, 120, 500, 600]);
+    let mut backoff = backoff::Backoff::new(&[0, 60, 120, 500, 600]);
     'retrying: loop {
         sleep(Duration::from_secs(backoff.next())).await;
         let tls = async_native_tls::TlsConnector::new();
