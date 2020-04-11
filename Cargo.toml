@@ -3,6 +3,7 @@ authors = ["Simon Poirier <simpoir@gmail.com>"]
 edition = "2018"
 name = "imap_block"
 version = "0.1.0"
+license = "MIT"
 
 [dependencies]
 async-imap = "0.2.0"

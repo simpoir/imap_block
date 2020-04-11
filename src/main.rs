@@ -1,7 +1,7 @@
 use async_std::fs::File;
 use async_std::prelude::*;
 use async_std::task::sleep;
-use log::{self, debug, error};
+use log::{self, debug, error, warn};
 use std::env::args;
 use std::process::exit;
 use std::time::Duration;
@@ -123,7 +123,7 @@ async fn main() {
         let c = match async_imap::connect((host, cred.port), host, tls).await {
             Ok(c) => c,
             Err(e) => {
-                debug!("Error connecting: {}", e);
+                warn!("Error connecting: {}", e);
                 continue 'retrying;
             }
         };
@@ -140,7 +140,7 @@ async fn main() {
             Ok(cap) => cap.has_str("IDLE"),
             Err(e) => {
                 error!("Failure listing caps: {}", e);
-                continue 'retrying;
+                exit(2);
             }
         };
         debug!("Server can IDLE: {}", can_idle);
@@ -163,6 +163,7 @@ async fn main() {
             };
 
             dump_status(count);
+            backoff.reset();
 
             if !can_idle {
                 sleep(Duration::from_secs(POLL)).await;
@@ -189,7 +190,6 @@ async fn main() {
             };
             drop(stopper); // drop only after waiting to avoid early return
             debug!("done idling");
-            backoff.reset();
         }
     }
 }
