@@ -4,16 +4,23 @@ use std::env::args;
 use std::process::exit;
 use std::time::Duration;
 
+mod backoff;
 mod creds;
 mod errors;
-mod backoff;
 
 const POLL: u64 = 300;
 const KEEP_ALIVE: u64 = 1700;
 
-fn dump_status(count: usize) {
-    let percent = if count > 0 { 100 } else { 0 };
-    println!("{{\"text\": \"{}\", \"percentage\": {}}}", count, percent);
+/// Write json block status to stdout, setting percentage as 100 if any unread.
+fn dump_status(new_count: usize, count: u32) {
+    if new_count > 0 {
+        println!(
+            "{{\"text\": \"({}) {}\", \"percentage\": 100}}",
+            new_count, count
+            );
+    } else {
+        println!("{{\"text\": \"{}\", \"percentage\": 0}}", count);
+    };
 }
 
 #[async_std::main]
@@ -69,16 +76,16 @@ async fn main() {
         };
         debug!("Server can IDLE: {}", can_idle);
 
-        match s.examine("INBOX").await {
-            Ok(mb) => mb,
-            Err(e) => {
-                debug!("Failure listing mailbox: {}", e);
-                continue 'retrying;
-            }
-        };
-
         'poll: loop {
-            let count = match s.search("UNSEEN").await {
+            let count = match s.examine("INBOX").await {
+                Ok(mb) => mb.exists,
+                Err(e) => {
+                    debug!("Failure listing mailbox: {}", e);
+                    continue 'retrying;
+                }
+            };
+
+            let new_count = match s.search("UNSEEN").await {
                 Ok(ids) => ids.len(),
                 Err(e) => {
                     debug!("Failure searching unread: {}", e);
@@ -86,7 +93,7 @@ async fn main() {
                 }
             };
 
-            dump_status(count);
+            dump_status(new_count, count);
             backoff.reset();
 
             if !can_idle {
