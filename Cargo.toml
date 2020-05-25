@@ -5,6 +5,10 @@ name = "imap_block"
 version = "0.1.0"
 license = "MIT"
 
+[profile.release]
+lto = true
+panic = 'abort'
+
 [dependencies]
 async-imap = "0.2.0"
 urlparse = "0.7.3"
