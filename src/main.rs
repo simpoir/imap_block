@@ -15,11 +15,11 @@ const KEEP_ALIVE: u64 = 1700;
 fn dump_status(new_count: usize, count: u32) {
     if new_count > 0 {
         println!(
-            "{{\"text\": \"({}) {}\", \"percentage\": 100}}",
+            "{{\"full_text\": \"({}) {}\", \"color\": \"#00cc00\"}}",
             new_count, count
             );
     } else {
-        println!("{{\"text\": \"{}\", \"percentage\": 0}}", count);
+        println!("{{\"full_text\": \"{}\", \"color\": \"\"}}", count);
     };
 }
 
