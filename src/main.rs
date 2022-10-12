@@ -17,7 +17,7 @@ fn dump_status(new_count: usize, count: u32) {
         println!(
             "{{\"full_text\": \"({}) {}\", \"color\": \"#00cc00\"}}",
             new_count, count
-            );
+        );
     } else {
         println!("{{\"full_text\": \"{}\", \"color\": \"\"}}", count);
     };
@@ -29,16 +29,12 @@ async fn main() {
     env_logger::init();
 
     let mut argv = args();
-    let prog = argv.next().unwrap();
-    let conf_path = match argv.next() {
-        Some(v) => v,
-        None => {
-            error!("Syntax: {} <mutt_conf>", prog);
-            exit(1);
-        }
+    let _prog = argv.next().unwrap();
+    let cred_res = match argv.next() {
+        Some(conf_path) => creds::Creds::from_mutt(&conf_path).await,
+        None => creds::Creds::from_stdin(),
     };
-
-    let cred = match creds::Creds::from_mutt(&conf_path).await {
+    let cred = match cred_res {
         Ok(v) => v,
         Err(e) => {
             error!("Problem reading config: {}", e);

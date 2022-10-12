@@ -11,6 +11,38 @@ pub struct Creds {
 }
 
 impl Creds {
+    pub fn from_stdin() -> Res<Creds> {
+        log::debug!("waiting from creds on stdin");
+        let mut host = String::new();
+        let mut port = 993;
+        let mut user = String::new();
+        let mut pass = String::new();
+        std::io::stdin().read_line(&mut pass)?;
+        pass = pass.trim().into();
+        let mut line = String::new();
+        while let Ok(siz) = std::io::stdin().read_line(&mut line) {
+            if siz == 0 {
+                break;
+            }
+            if let Some(stripped) = line.strip_prefix("user:") {
+                user = stripped.into();
+            } else if let Some(stripped) = line.strip_prefix("imap:") {
+                host = stripped.into();
+                if let Some((head, tail)) = host.split_once(':') {
+                    port = tail.parse()?;
+                    host = head.into();
+                }
+            }
+            line.clear();
+        }
+        Ok(Creds {
+            host,
+            user,
+            pass,
+            port,
+        })
+    }
+
     pub async fn from_mutt(conf: &str) -> Res<Creds> {
         let mut c = String::new();
         File::open(conf).await?.read_to_string(&mut c).await?;
@@ -21,26 +53,37 @@ impl Creds {
         let mut pass = String::new();
         for l in c.lines() {
             if l.contains("imap_pass") {
-                if let Some(sep) = l.find("=") {
+                if let Some(sep) = l.find('=') {
                     let (_, v) = l.split_at(sep + 1);
                     pass = v.trim().trim_matches('\'').trim_matches('"').into();
+                    if pass.starts_with('`') {
+                        let cmd = std::process::Command::new("/bin/sh")
+                            .arg("-c")
+                            .arg(pass.trim_matches('`'))
+                            .output()?;
+                        pass = String::from_utf8_lossy(&cmd.stdout)
+                            .lines()
+                            .next()
+                            .unwrap()
+                            .to_string();
+                    }
                 };
             }
 
             if l.contains("imap_user") {
-                if let Some(sep) = l.find("=") {
+                if let Some(sep) = l.find('=') {
                     let (_, v) = l.split_at(sep + 1);
                     user = v.trim().trim_matches('\'').trim_matches('"').into();
                 };
             }
 
             if l.contains("folder") {
-                if let Some(sep) = l.find("=") {
+                if let Some(sep) = l.find('=') {
                     let (_, v) = l.split_at(sep + 1);
                     let raw_url = v.trim().trim_matches('\'').trim_matches('"');
                     let url = urlparse::urlparse(raw_url);
                     if let Some(h) = url.hostname {
-                        host = h.into();
+                        host = h;
                     }
                     if let Some(p) = url.port {
                         port = p;

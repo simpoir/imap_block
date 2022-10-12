@@ -10,12 +10,12 @@ lto = true
 panic = 'abort'
 
 [dependencies]
-async-imap = "0.2.0"
-urlparse = "0.7.3"
-async-std = {version = "1.5.0", features = ["std", "attributes"]}
-async-native-tls = "0.3.3"
-log = "0.4.8"
-env_logger = "0.7.1"
+async-imap = "*"
+urlparse = "*"
+async-std = {version = "*", features = ["std", "attributes"]}
+async-native-tls = "*"
+log = "*"
+env_logger = "*"
 
 [dev-dependencies]
 tempfile = "3.1.0"
