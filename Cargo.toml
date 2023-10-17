@@ -2,12 +2,14 @@
 authors = ["Simon Poirier <simpoir@gmail.com>"]
 edition = "2018"
 name = "imap_block"
-version = "0.1.0"
+version = "0.1.1"
 license = "MIT"
 
 [profile.release]
 lto = true
 panic = 'abort'
+opt-level = "s"
+strip = true
 
 [dependencies]
 async-imap = "*"

@@ -1,5 +1,6 @@
+use async_std::net::TcpStream;
 use async_std::task::sleep;
-use log::{self, debug, error, warn};
+use log::{self, debug, error};
 use std::env::args;
 use std::process::exit;
 use std::time::Duration;
@@ -10,6 +11,15 @@ mod errors;
 
 const POLL: u64 = 300;
 const KEEP_ALIVE: u64 = 1700;
+
+macro_rules! fatal {
+    ($val: literal, $msg: literal) => {
+        |e| {
+            error!($msg, e);
+            std::process::exit($val);
+        }
+    };
+}
 
 /// Write json block status to stdout, setting percentage as 100 if any unread.
 fn dump_status(new_count: usize, count: u32) {
@@ -34,26 +44,21 @@ async fn main() {
         Some(conf_path) => creds::Creds::from_mutt(&conf_path).await,
         None => creds::Creds::from_stdin(),
     };
-    let cred = match cred_res {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Problem reading config: {}", e);
-            exit(1);
-        }
-    };
+    let cred = cred_res.unwrap_or_else(fatal!(1, "Problem reading config: {}"));
 
+    let host = cred.host.as_str();
     let mut backoff = backoff::Backoff::new(&[0, 60, 120, 500, 600]);
     'retrying: loop {
         sleep(Duration::from_secs(backoff.next())).await;
+        let stream = TcpStream::connect((host, cred.port))
+            .await
+            .unwrap_or_else(fatal!(2, "Failure connecting: {}"));
         let tls = async_native_tls::TlsConnector::new();
-        let host = cred.host.as_str();
-        let c = match async_imap::connect((host, cred.port), host, tls).await {
-            Ok(c) => c,
-            Err(e) => {
-                warn!("Error connecting: {}", e);
-                continue 'retrying;
-            }
-        };
+        let tls_stream = tls
+            .connect(host, stream)
+            .await
+            .unwrap_or_else(fatal!(2, "Error establishing TLS: {}"));
+        let c = async_imap::Client::new(tls_stream);
         let mut s = match c.login(cred.user.as_str(), cred.pass.as_str()).await {
             Ok(s) => s,
             Err((e, _)) => {
