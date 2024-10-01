@@ -1,4 +1,5 @@
 use async_std::fs::File;
+use async_std::path::Path;
 use async_std::prelude::*;
 
 use crate::errors::Res;
@@ -43,7 +44,7 @@ impl Creds {
         })
     }
 
-    pub async fn from_mutt(conf: &str) -> Res<Creds> {
+    pub async fn from_mutt(conf: &Path) -> Res<Creds> {
         let mut c = String::new();
         File::open(conf).await?.read_to_string(&mut c).await?;
 

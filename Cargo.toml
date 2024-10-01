@@ -18,6 +18,7 @@ async-std = {version = "*", features = ["std", "attributes"]}
 async-native-tls = "*"
 log = "*"
 env_logger = "*"
+clap = { version = "4.5.19", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.1.0"

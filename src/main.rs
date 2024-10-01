@@ -1,7 +1,6 @@
 use async_std::net::TcpStream;
 use async_std::task::sleep;
 use log::{self, debug, error};
-use std::env::args;
 use std::process::exit;
 use std::time::Duration;
 
@@ -21,16 +20,40 @@ macro_rules! fatal {
     };
 }
 
-/// Write json block status to stdout, setting percentage as 100 if any unread.
-fn dump_status(new_count: usize, count: u32) {
-    if new_count > 0 {
-        println!(
-            "{{\"full_text\": \"({}) {}\", \"color\": \"#00cc00\"}}",
-            new_count, count
-        );
-    } else {
-        println!("{{\"full_text\": \"{}\", \"color\": \"\"}}", count);
-    };
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum OutputMode {
+    I3,
+    Waybar,
+}
+
+impl OutputMode {
+    /// Write json block status to stdout, setting percentage as 100 if any unread.
+    fn dump_status(&self, new_count: usize, count: u32) {
+        let flagged = new_count > 0;
+        match self {
+            OutputMode::I3 => {
+                println!(
+                    "{{\"full_text\": \"({}) {}\", \"color\": \"{}\"}}",
+                    new_count,
+                    count,
+                    if flagged { "#00cc00" } else { "" }
+                )
+            }
+            OutputMode::Waybar => println!(
+                "{{\"text\": \"({}) {}\", \"alt\": \"{}\"}}",
+                new_count, count, flagged
+            ),
+        }
+    }
+}
+
+#[derive(clap::Parser, Debug)]
+struct Args {
+    #[clap(short, long, default_value = "i3")]
+    mode: OutputMode,
+
+    /// Credentials file, in muttrc format (default: stdin)
+    cred_file: Option<std::path::PathBuf>,
 }
 
 #[async_std::main]
@@ -38,10 +61,10 @@ async fn main() {
     // env RUST_LOG=debug
     env_logger::init();
 
-    let mut argv = args();
-    let _prog = argv.next().unwrap();
-    let cred_res = match argv.next() {
-        Some(conf_path) => creds::Creds::from_mutt(&conf_path).await,
+    let args: Args = clap::Parser::parse();
+
+    let cred_res = match &args.cred_file {
+        Some(conf_path) => creds::Creds::from_mutt(async_std::path::Path::new(conf_path)).await,
         None => creds::Creds::from_stdin(),
     };
     let cred = cred_res.unwrap_or_else(fatal!(1, "Problem reading config: {}"));
@@ -94,7 +117,7 @@ async fn main() {
                 }
             };
 
-            dump_status(new_count, count);
+            args.mode.dump_status(new_count, count);
             backoff.reset();
 
             if !can_idle {
